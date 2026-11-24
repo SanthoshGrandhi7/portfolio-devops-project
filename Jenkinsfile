@@ -1,9 +1,14 @@
-
 pipeline {
     agent any
 
     options {
         disableConcurrentBuilds()
+        skipDefaultCheckout(true)
+    }
+
+    environment {
+        MINIKUBE_HOME = 'C:/Users/santh'
+        KUBECONFIG = 'C:/Users/santh/.kube/config'
     }
 
     stages {
@@ -25,22 +30,40 @@ pipeline {
             }
         }
 
-        stage('Deploy Docker Container') {
+        stage('Check Kubernetes') {
             steps {
-                // Remove old test container if present
-                bat(
-                    script: 'docker rm -f portfolio-jenkins >NUL 2>&1',
-                    returnStatus: true
-                )
-
-                // Deploy latest image
-                bat 'docker run -d --name portfolio-jenkins -p 8086:80 portfolio-devops:jenkins-%BUILD_NUMBER%'
+                bat 'minikube status -p minikube'
+                bat 'kubectl --context=minikube get nodes'
             }
         }
 
-        stage('Verify Deployment') {
+        stage('Load Image into Minikube') {
             steps {
-                bat 'curl.exe --fail --retry 5 --retry-delay 2 --retry-connrefused -I http://127.0.0.1:8086/'
+                bat 'minikube -p minikube image load portfolio-devops:jenkins-%BUILD_NUMBER%'
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                bat 'kubectl --context=minikube set image --local -f k8s/deployment.yaml portfolio=portfolio-devops:jenkins-%BUILD_NUMBER% -o yaml > deployment-rendered.yaml'
+
+                bat 'kubectl --context=minikube apply -f deployment-rendered.yaml'
+
+                bat 'kubectl --context=minikube apply -f k8s/service.yaml'
+            }
+        }
+
+        stage('Verify Rolling Update') {
+            steps {
+                bat 'kubectl --context=minikube rollout status deployment/portfolio-deployment -n portfolio --timeout=180s'
+
+                bat 'kubectl --context=minikube get pods -n portfolio'
+            }
+        }
+
+        stage('Verify Application') {
+            steps {
+                bat 'kubectl --context=minikube exec -n portfolio deployment/portfolio-deployment -- wget -q -O /dev/null http://portfolio-service/'
             }
         }
     }
