@@ -7,9 +7,10 @@ pipeline {
     }
 
     environment {
-        MINIKUBE_HOME = 'C:/Users/santh'
-        KUBECONFIG = 'C:/Users/santh/.kube/config'
-    }
+    MINIKUBE_HOME = 'C:/Users/santh'
+    KUBECONFIG = 'C:/Users/santh/.kube/config'
+    PATH = "C:\\Program Files\\Helm;${env.PATH}"
+}
 
     stages {
         stage('Checkout') {
