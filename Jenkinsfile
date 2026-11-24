@@ -30,10 +30,17 @@ pipeline {
             }
         }
 
-        stage('Check Kubernetes') {
+        stage('Check Kubernetes and Helm') {
             steps {
                 bat 'minikube status -p minikube'
                 bat 'kubectl --context=minikube get nodes'
+                bat 'helm version'
+            }
+        }
+
+        stage('Validate Helm Chart') {
+            steps {
+                bat 'helm lint helm/portfolio'
             }
         }
 
@@ -43,21 +50,17 @@ pipeline {
             }
         }
 
-        stage('Deploy to Kubernetes') {
+        stage('Deploy using Helm') {
             steps {
-                bat 'kubectl --context=minikube set image --local -f k8s/deployment.yaml portfolio=portfolio-devops:jenkins-%BUILD_NUMBER% -o yaml > deployment-rendered.yaml'
-
-                bat 'kubectl --context=minikube apply -f deployment-rendered.yaml'
-
-                bat 'kubectl --context=minikube apply -f k8s/service.yaml'
+                bat 'helm upgrade --install portfolio helm/portfolio -n portfolio --kube-context minikube --set-string image.tag=jenkins-%BUILD_NUMBER% --wait --timeout 180s'
             }
         }
 
         stage('Verify Rolling Update') {
             steps {
                 bat 'kubectl --context=minikube rollout status deployment/portfolio-deployment -n portfolio --timeout=180s'
-
                 bat 'kubectl --context=minikube get pods -n portfolio'
+                bat 'helm list -n portfolio --kube-context minikube'
             }
         }
 
